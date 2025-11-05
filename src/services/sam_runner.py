@@ -2,8 +2,8 @@
 Service for running SAM2 inference
 """
 import os
-import cv2
-import numpy as np
+import torch
+import gc
 from ultralytics import SAM
 from ultralytics.data.loaders import LoadImagesAndVideos, SourceTypes
 from ultralytics.models.sam import SAM2VideoPredictor
@@ -126,7 +126,7 @@ class SAMRunner:
         return balanced_points, balanced_labels
     
     def create_video_predictor(self, conf=0.88, imgsz=1024):
-        """Create SAM2VideoPredictor for batch processing."""
+        """Create SAM2VideoPredictor for batch processing with optimized settings for object ID stability."""
         overrides = dict(
             conf=conf,
             task="segment",
@@ -136,6 +136,19 @@ class SAMRunner:
             save=False,
         )
         self.predictor = SAM2VideoPredictor(overrides=overrides)
+        
+        # Configure predictor attributes for stable multi-object tracking
+        # non_overlap_masks: Ensures masks don't overlap, maintaining distinct object boundaries
+        self.predictor.non_overlap_masks = True
+        
+        # clear_non_cond_mem_around_input: Keep memory around inputs to maintain tracking
+        # Setting to False helps preserve object identity when objects temporarily disappear
+        self.predictor.clear_non_cond_mem_around_input = False
+        
+        # clear_non_cond_mem_for_multi_obj: Critical for multi-object tracking
+        # Setting to False prevents clearing memory between objects, maintaining consistent IDs
+        self.predictor.clear_non_cond_mem_for_multi_obj = False
+        
         return self.predictor
     
     def create_image_loader(self, folder_path: str):
@@ -192,6 +205,25 @@ class SAMRunner:
             if save_dir:
                 result.save(os.path.join(save_dir, result.path.split('/')[-1]))
             yield result
+        
+        # Cleanup after processing to free VRAM
+        self.cleanup_predictor()
+
+    def cleanup_predictor(self):
+        """Clean up predictor and free VRAM."""
+        if self.predictor is not None:
+            # Delete the predictor object
+            del self.predictor
+            self.predictor = None
+        
+        # Force garbage collection
+        gc.collect()
+        
+        # Clear PyTorch CUDA cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+
 
     # Legacy methods for backward compatibility
     def run_segmentation(self, frame, points, labels):

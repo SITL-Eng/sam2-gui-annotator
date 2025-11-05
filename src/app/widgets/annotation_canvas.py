@@ -240,6 +240,10 @@ Instructions:
                 self.current_results = None
                 self.log_status(f"Cleared previous annotations for new folder")
                 
+                # Clean up VRAM from previous video processing
+                self.controller.cleanup_vram()
+                self.log_status(f"Cleaned up VRAM from previous session")
+                
                 success = self.controller.load_image_folder(folder)
                 if success:
                     info = self.controller.get_image_info()
@@ -546,6 +550,11 @@ Instructions:
         self.process_batch_btn.setEnabled(True)
         self.progress_bar.setValue(100)
         self.log_status(f"Batch processing completed! Processed {len(results)} images")
+        
+        # Clean up VRAM after batch processing
+        if self.controller:
+            self.controller.cleanup_vram()
+            self.log_status("Cleaned up VRAM after batch processing")
         
         # Get the directory structure info for display
         current_folder = self.controller.image_loader.current_folder

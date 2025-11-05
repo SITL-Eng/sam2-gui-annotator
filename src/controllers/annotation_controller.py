@@ -261,6 +261,11 @@ class AnnotationController:
         return (self.annotation_state.has_annotations() and 
                 self.image_loader.get_image_count() > 0 and
                 not self.is_batch_processing)
+    
+    def cleanup_vram(self):
+        """Manually clean up VRAM by clearing SAM runner predictor cache."""
+        if self.sam_runner:
+            self.sam_runner.cleanup_predictor()
 
     # Legacy methods for backward compatibility  
     def load_video(self, video_path):
